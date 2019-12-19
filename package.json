@@ -1,0 +1,30 @@
+{
+  "name": "webpack-dynamic-import-cdn-plugin",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dest/lib/index.js",
+  "files": [
+    "dest/lib"
+  ],
+  "scripts": {
+    "build": "rm -rf ./dest && tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "webpack",
+    "cdn"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aoi-umi/mongoose-ts.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {},
+  "peerDependencies": {
+    "webpack": "^4.0.0"
+  },
+  "devDependencies": {
+    "webpack": "^4.41.3"
+  }
+}
