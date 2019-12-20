@@ -1,5 +1,12 @@
 
 const { DynamicImportCdnPlugin } = require('../../dest/lib');
+function getCdn(host, cfg) {
+    let rs = {};
+    for (let key in cfg) {
+        rs[key] = host + cfg[key];
+    }
+    return rs;
+}
 module.exports = {
     productionSourceMap: false,
     configureWebpack: {
@@ -7,6 +14,11 @@ module.exports = {
             css: {
                 'iview/dist/styles/iview.css': 'https://unpkg.com/iview@3.5.4/dist/styles/iview.css',
                 'video.js/dist/video-js.min.css': 'https://unpkg.com/video.js@7.6.6/dist/video-js.min.css',
+                ...getCdn('https://unpkg.com/quill@1.3.7/dist/', {
+                    'quill/dist/quill.core.css': 'quill.core.css',
+                    'quill/dist/quill.snow.css': 'quill.snow.css',
+                    'quill/dist/quill.bubble.css': 'quill.bubble.css',
+                }),
             },
             js: {
                 vue: {
@@ -29,6 +41,10 @@ module.exports = {
                 'video.js': {
                     moduleName: 'videojs',
                     url: 'https://unpkg.com/video.js@7.6.6/dist/video.min.js',
+                },
+                quill: {
+                    moduleName: 'Quill',
+                    url: 'https://unpkg.com/quill@1.3.7/dist/quill.min.js',
                 },
             }
         })]

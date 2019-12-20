@@ -7,9 +7,15 @@ export default class App extends Vue {
     render() {
         return (
             <div>
-                <Button on-click={() => {
-                    this.$router.push({ path: routerConfig.dynamicCdn.path });
-                }}>click me</Button>
+                <router-link to={routerConfig.index.path}>
+                    <Button>{routerConfig.index.text}</Button>
+                </router-link>
+                <router-link to={routerConfig.dynamicCdn.path}>
+                    <Button>{routerConfig.dynamicCdn.text}</Button>
+                </router-link>
+                <router-link to={routerConfig.dynamicCdn2.path}>
+                    <Button>{routerConfig.dynamicCdn2.text}</Button>
+                </router-link>
                 <router-view></router-view>
             </div>
         );

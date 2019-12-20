@@ -12,11 +12,16 @@ export const routerConfig = {
         text: 'dynamicCdn',
         component: () => import('./views/dynamic-cdn')
     },
+    dynamicCdn2: {
+        path: '/dynamicCdn2',
+        text: 'dynamicCdn2',
+        component: () => import('./views/dynamic-cdn2')
+    },
 };
 
 let routes: RouteConfig[] = Object.values(routerConfig);
 const router = new Router({
-    mode: 'history',
+    // mode: 'history',
     base: process.env.BASE_URL,
     routes,
 });

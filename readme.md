@@ -17,3 +17,8 @@ new DynamicImportCdnPlugin({
   }
 });
 ```
+css depend on pkg `mini-css-extract-plugin`
+
+![size](https://raw.githubusercontent.com/aoi-umi/note/master/git%E6%96%87%E6%A1%A3/webpack-dynamic-import-cdn-plugin/size.png)
+
+![example-vue](https://raw.githubusercontent.com/aoi-umi/note/master/git%E6%96%87%E6%A1%A3/webpack-dynamic-import-cdn-plugin/sample-vue.gif)

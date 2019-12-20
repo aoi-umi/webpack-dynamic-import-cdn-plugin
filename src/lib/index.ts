@@ -67,21 +67,6 @@ export class DynamicImportCdnPlugin {
         let cssClearMap = {};
 
         compiler.hooks.compilation.tap(PluginName, function (compilation, options) {
-            //i don't know how to exclude it now, so, clear the content
-            const clearCss = (key, cdnCssDep) => {
-                let cssDep = cdnCssDep.module.dependencies.find(e => e.module && e.module.type === CssExtractType);
-                if (cssDep) {
-                    cssDep.content =
-                        cssDep.module.content = `/* cdn  ${cdnCss[key]} */`;
-                    cdnCssDep.module.assets = {};
-                    let m = compilation.modules.find(ele => ele.rawRequest === key);
-                    m.buildInfo.assets = null;
-                    cssClearMap[key] = true;
-                    // console.log(`clear css: ${key}`);
-                }
-                return cssDep;
-            };
-
             const setGlobalCdn = (type, chunk) => {
                 let global = globalCdn[type];
                 let cdnOpt = self.cdn[type];
@@ -94,7 +79,6 @@ export class DynamicImportCdnPlugin {
                             break;
                         if (type === 'css') {
                             global[key] = cdnOpt[key];
-                            clearCss(key, dep);
                         } else {
                             global[key] = cdnOpt[key].url
                         }
@@ -220,20 +204,6 @@ export class DynamicImportCdnPlugin {
                         }
                     }
                 }
-
-                //clear content
-                let dependencies = getDependencies(chunk.getModules());
-                for (let key in cdnCss) {
-                    if (cssClearMap[key])
-                        continue;
-                    for (let d of dependencies) {
-                        let cdnCssDep = findCdnDep(key, d.module);
-                        if (!cdnCssDep)
-                            continue;
-                        if (clearCss(key, cdnCssDep))
-                            break;
-                    }
-                }
             }
 
             const insCdnCssChunksVar = 'installedCdnCssChunks';
@@ -241,6 +211,20 @@ export class DynamicImportCdnPlugin {
                 let mainTemplate = compilation.mainTemplate;
                 mainTemplate.hooks.localVars.tap(PluginName, function (source, chunk, hash) {
                     return Template.asString([source, '', '// object to store loaded cdn CSS chunks', `var ${insCdnCssChunksVar} = {};`]);
+                });
+
+                compilation.hooks.afterOptimizeDependencies.tap(PluginName, (modules) => {
+                    for (let key in cdnCss) {
+                        if (cssClearMap[key])
+                            continue;
+                        modules.filter(m => m.issuer && m.issuer.rawRequest === key).forEach(m => {
+                            //i don't know how to exclude it now, so, clear the content
+                            m.content = `/* cdn  ${cdnCss[key]} */`;
+                            if (m.issuer.buildInfo && m.issuer.buildInfo.assets)
+                                m.issuer.buildInfo.assets = null;
+                            cssClearMap[key] = true;
+                        });
+                    }
                 });
 
                 compilation.hooks.afterOptimizeChunkIds.tap(PluginName, () => {

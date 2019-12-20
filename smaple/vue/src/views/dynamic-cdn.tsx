@@ -17,6 +17,10 @@ export default class DynamicCdn extends Vue {
     }
 
     render() {
-        return <video ref="video" class="video-js vjs-default-skin vjs-big-play-centered"/>;
+        return (
+            <div>
+                <video ref="video" class="video-js vjs-default-skin vjs-big-play-centered" />
+            </div>
+        );
     }
 }
