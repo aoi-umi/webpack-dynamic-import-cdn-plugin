@@ -2,23 +2,42 @@ import { Template, ExternalsPlugin } from 'webpack';
 import * as Chunk from 'webpack/lib/Chunk';
 
 const PluginName = 'DynamicImportCdnPlugin';
-type CdnOpt = {
-    css: { [key: string]: string };
-    js: {
+type CdnPublicOpt = {
+    url: string;
+    noUrlPrefix?: boolean;
+}
+type CssOptType = {
+    [key: string]: {} & CdnPublicOpt
+}
+type CdnOpt<CssType = string | {
+} & CdnPublicOpt> = {
+    urlPrefix?: string;
+    css?: {
+        [key: string]: CssType
+    };
+    js?: {
         [key: string]: {
             moduleName: string;
-            url: string;
-        }
+        } & CdnPublicOpt
     };
 };
 export class DynamicImportCdnPlugin {
-    cdn: CdnOpt;
+    cdn: CdnOpt<CssOptType>;
     globalCdn: {
         js: any;
         css: any;
     };
     constructor(cdn: CdnOpt) {
-        this.cdn = cdn;
+        let newCdnCss = {};
+        let origCdnCss = cdn.css
+        for (let key in origCdnCss) {
+            newCdnCss[key] = typeof origCdnCss[key] === 'string' ? { url: origCdnCss[key] } : origCdnCss[key];
+        }
+        let cdnCss = newCdnCss;
+        this.cdn = {
+            ...cdn,
+            css: cdnCss
+        };
         this.globalCdn = {
             js: {},
             css: {},
@@ -30,13 +49,26 @@ export class DynamicImportCdnPlugin {
         let externals = {};
         let cdnJs = self.cdn.js;
         let hasCdnJs = cdnJs && Object.keys(cdnJs).length > 0;
-        let cdnCss = self.cdn.css;
-        let hasCdnCss = cdnCss && Object.keys(cdnCss).length > 0;
         if (hasCdnJs) {
             for (let key in cdnJs) {
                 externals[key] = cdnJs[key].moduleName;
             }
         }
+
+        let cdnCss = self.cdn.css;
+        let hasCdnCss = cdnCss && Object.keys(cdnCss).length > 0;
+
+        function updateOpt(opts) {
+            for (let key in opts) {
+                let opt: CdnPublicOpt = opts[key];
+                if (self.cdn.urlPrefix && (!opt || !opt.noUrlPrefix)) {
+                    opt.url = `${self.cdn.urlPrefix}${opt.url}`
+                }
+            }
+        }
+        updateOpt(cdnCss);
+        updateOpt(cdnJs);
+
         const CssExtractType = "css/mini-extract";
 
         if (Object.keys(externals).length) {
@@ -77,11 +109,13 @@ export class DynamicImportCdnPlugin {
                         let dep = findCdnDep(key, chunk.entryModule);
                         if (!dep)
                             break;
-                        if (type === 'css') {
-                            global[key] = cdnOpt[key];
-                        } else {
-                            global[key] = cdnOpt[key].url
-                        }
+
+                        // if (type === 'css') {
+                        //     global[key] = cdnOpt[key];
+                        // } else {
+                        //     global[key] = cdnOpt[key].url
+                        // }
+                        global[key] = cdnOpt[key].url
                         break;
                     }
                 }
@@ -191,14 +225,14 @@ export class DynamicImportCdnPlugin {
                 //find css map
                 for (let c of chunk.getAllAsyncChunks()) {
                     for (let key in cdnCss) {
-                        if (globalCdn.css[key] || (chunkCssMap[c.id] && chunkCssMap[c.id].includes(cdnCss[key])))
+                        if (globalCdn.css[key] || (chunkCssMap[c.id] && chunkCssMap[c.id].includes(cdnCss[key].url)))
                             continue;
                         for (const module of c.modulesIterable) {
                             if (module.type === CssExtractType && module.issuer.rawRequest === key) {
                                 if (!chunkCssMap[c.id]) {
                                     chunkCssMap[c.id] = [];
                                 }
-                                chunkCssMap[c.id].push(cdnCss[key]);
+                                chunkCssMap[c.id].push(cdnCss[key].url);
                                 break;
                             }
                         }
@@ -219,7 +253,7 @@ export class DynamicImportCdnPlugin {
                             continue;
                         modules.filter(m => m.issuer && m.issuer.rawRequest === key).forEach(m => {
                             //i don't know how to exclude it now, so, clear the content
-                            m.content = `/* cdn  ${cdnCss[key]} */`;
+                            m.content = `/* cdn  ${cdnCss[key].url} */`;
                             if (m.issuer.buildInfo && m.issuer.buildInfo.assets)
                                 m.issuer.buildInfo.assets = null;
                             cssClearMap[key] = true;
@@ -240,6 +274,7 @@ export class DynamicImportCdnPlugin {
                     buf.push(
                         '',
                         `var ${cdnCssVar} = ${JSON.stringify(chunkCssMap, null, '\t')};`,
+                        // `var testCss = ${JSON.stringify(cdnCss, null, '\t')};`,
                         `if(${insCdnCssChunksVar}[chunkId]) promises.push(${insCdnCssChunksVar}[chunkId]);`,
                         `else if(${insCdnCssChunksVar}[chunkId] !== 0 && ${cdnCssVar}[chunkId]) {`,
                         Template.indent([
