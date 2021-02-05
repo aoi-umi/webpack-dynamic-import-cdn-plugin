@@ -20,7 +20,8 @@ new DynamicImportCdnPlugin({
 });
 ```
 
-css depend on pkg `mini-css-extract-plugin`
+css depend on pkg `mini-css-extract-plugin`  
+css 需要依赖 `mini-css-extract-plugin` 插件，且仅在build模式生效
 
 ![size](https://raw.githubusercontent.com/aoi-umi/note/master/git%E6%96%87%E6%A1%A3/webpack-dynamic-import-cdn-plugin/size.png)
 

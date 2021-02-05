@@ -25,8 +25,8 @@ module.exports = {
             js: {
                 vue: {
                     moduleName: 'Vue',
-                    url: 'https://unpkg.com/vue@2.6.10/dist/vue.min.js',
-                    noUrlPrefix: true
+                    url: '/vue@2.6.10/dist/vue.min.js',
+                    // noUrlPrefix: true
                 },
                 'vue-router': {
                     moduleName: 'VueRouter',

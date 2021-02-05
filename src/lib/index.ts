@@ -83,14 +83,16 @@ export class DynamicImportCdnPlugin {
         const findCdnDep = (dep, module, res?) => {
             if (!res)
                 res = {};
-            for (let d of module.dependencies) {
-                if (d.request === dep)
-                    return d;
-                if (d.module && d.userRequest && !res[d.userRequest]) {
-                    res[d.userRequest] = true;
-                    let rs = findCdnDep(dep, d.module, res);
-                    if (rs)
-                        return rs;
+            if (module) {
+                for (let d of module.dependencies) {
+                    if (d.request === dep)
+                        return d;
+                    if (d.module && d.userRequest && !res[d.userRequest]) {
+                        res[d.userRequest] = true;
+                        let rs = findCdnDep(dep, d.module, res);
+                        if (rs)
+                            return rs;
+                    }
                 }
             }
             return false;
@@ -138,9 +140,9 @@ export class DynamicImportCdnPlugin {
             }
 
             const cdnJsFn = (chunk) => {
-                if (!chunk.isOnlyInitial()) {
-                    return;
-                }
+                // if (!chunk.isOnlyInitial()) {
+                //     return;
+                // }
                 let entry = chunk.hasRuntime();
                 if (entry) {
                     setGlobalCdn('js', chunk);
@@ -215,9 +217,9 @@ export class DynamicImportCdnPlugin {
 
             let chunkCssMap = {};
             const cdnCssFn = (chunk) => {
-                if (!chunk.isOnlyInitial()) {
-                    return;
-                }
+                // if (!chunk.isOnlyInitial()) {
+                //     return;
+                // }
                 let entry = chunk.hasRuntime();
                 if (entry) {
                     setGlobalCdn('css', chunk);
