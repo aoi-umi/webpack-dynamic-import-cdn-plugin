@@ -1,6 +1,6 @@
 {
   "name": "webpack-dynamic-import-cdn-plugin",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "",
   "main": "dest/lib/index.js",
   "files": [
@@ -25,6 +25,7 @@
     "webpack": "^4.0.0"
   },
   "devDependencies": {
+    "@types/node": "^14.14.25",
     "webpack": "^4.41.3"
   }
 }

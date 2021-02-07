@@ -20,6 +20,7 @@ type CdnOpt<CssType = string | {
             moduleName: string;
         } & CdnPublicOpt
     };
+    for?: string;
 };
 export class DynamicImportCdnPlugin {
     cdn: CdnOpt<CssOptType>;
@@ -35,6 +36,7 @@ export class DynamicImportCdnPlugin {
         }
         let cdnCss = newCdnCss;
         this.cdn = {
+            for: 'html-webpack-plugin',
             ...cdn,
             css: cdnCss
         };
@@ -143,10 +145,10 @@ export class DynamicImportCdnPlugin {
                 // if (!chunk.isOnlyInitial()) {
                 //     return;
                 // }
-                let entry = chunk.hasRuntime();
-                if (entry) {
-                    setGlobalCdn('js', chunk);
-                }
+                // let entry = chunk.hasRuntime();
+                // if (entry) {
+                setGlobalCdn('js', chunk);
+                // }
                 let dependencies = getDependencies(chunk.getModules());
                 for (let d of dependencies) {
                     let chunkGroup = d.block.chunkGroup;
@@ -340,19 +342,80 @@ export class DynamicImportCdnPlugin {
             if (hasCdnCss)
                 cssHandler(compilation);
 
-            compilation.plugin('html-webpack-plugin-before-html-generation', function (htmlPluginData) {
-                function unshiftCdn(cdn, assets) {
-                    let list = [];
-                    for (let key in cdn) {
-                        list.push(cdn[key]);
-                    }
-                    if (list.length)
-                        assets.unshift(...list);
+            const logics: {
+                [key: string]: {
+                    setGlobal: () => any
                 }
-                unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
-                unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
-                return htmlPluginData;
-            });
+            } = {
+                'html-webpack-plugin': {
+                    setGlobal: () => {
+                        compilation.plugin('html-webpack-plugin-before-html-generation', function (htmlPluginData) {
+                            function unshiftCdn(cdn, assets) {
+                                let list = [];
+                                for (let key in cdn) {
+                                    list.push(cdn[key]);
+                                }
+                                if (list.length)
+                                    assets.unshift(...list);
+                            }
+                            unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
+                            unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
+                            return htmlPluginData;
+                        });
+                    }
+                },
+                'vue-client-plugin': {
+                    setGlobal: () => {
+                        compiler.hooks.emit.tap(PluginName, function () {
+                            // const hash = require('hash-sum');
+                            // let stats = compilation.getStats().toJson();
+                            let assets = [];
+                            for (let key in cdnJs) {
+                                assets.push({
+                                    name: key,
+                                    url: cdnJs[key].url,
+                                    initial: true//!!globalCdn.js[key]
+                                });
+                            }
+                            for (let key in compilation.assets) {
+                                if (key.includes('.json')) {
+                                    let asset = compilation.assets[key];
+                                    let manifest = JSON.parse(asset.source());
+
+                                    manifest.all.push(...assets.map(ele => ele.url));
+                                    // for (let ele of assets) {
+                                    //     if (!ele.initial) {
+                                    //         let m = stats.modules.find(m => m.id === ele.name);
+                                    //         if (m) {
+                                    //             m.issuerPath.forEach(issuer => {
+                                    //                 let hashId = hash(issuer.identifier.replace(/\s\w+$/, ''))
+                                    //                 let module = manifest.modules[hashId];
+                                    //                 if (!module)
+                                    //                     module = manifest.modules[hashId] = [];
+                                    //                 let idx = manifest.all.findIndex(a => a === ele.url);
+                                    //                 if (idx >= 0 && !module.includes(idx))
+                                    //                     module.push(idx)
+                                    //             })
+                                    //         }
+                                    //     }
+                                    // }
+
+                                    manifest.initial.unshift(...assets.filter(ele => ele.initial).map(ele => ele.url));
+                                    let json = JSON.stringify(manifest, null, 2);
+                                    let newAsset = {
+                                        source: function () { return json; },
+                                        size: function () { return json.length; }
+                                    };
+                                    compilation.assets[key] = newAsset;
+                                }
+                            }
+                        });
+                    }
+                }
+            };
+            let logic = logics[self.cdn.for];
+            if (logic)
+                logic.setGlobal();
         });
     }
 }
