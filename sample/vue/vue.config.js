@@ -15,11 +15,11 @@ module.exports = {
             css: {
                 'iview/dist/styles/iview.css': '/iview@3.5.4/dist/styles/iview.css',
                 'video.js/dist/video-js.min.css': '/video.js@7.6.6/dist/video-js.min.css',
-                ...getCdn('https://unpkg.com/quill@1.3.7/dist/', {
+                ...getCdn('/quill@1.3.7/dist/', {
                     'quill/dist/quill.core.css': 'quill.core.css',
                     'quill/dist/quill.snow.css': 'quill.snow.css',
                     'quill/dist/quill.bubble.css': 'quill.bubble.css',
-                }, true),
+                }, false),
                 'element-ui/lib/theme-chalk/index.css': '/element-ui@2.13.2/lib/theme-chalk/index.css',
             },
             js: {
@@ -52,7 +52,12 @@ module.exports = {
                 'element-ui': {
                     moduleName: 'ELEMENT',
                     url: '/element-ui@2.13.2/lib/index.js'
-                }
+                },
+
+                'echarts': {
+                    moduleName: 'echarts',
+                    url: '/echarts@5.0.2/dist/echarts.min.js',
+                },
             }
         })]
     },
