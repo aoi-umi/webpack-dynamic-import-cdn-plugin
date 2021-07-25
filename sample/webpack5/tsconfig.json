@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    "module": "CommonJS",
+    "target": "ES5",
+    "baseUrl": ".",
+    "allowJs": true,
+    "jsx": "preserve",
+    "experimentalDecorators": true,
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    },
+    "lib": [
+      "dom",
+      "dom.iterable",
+    ]
+  },
+  "include": [
+    "src/**/*",
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+}

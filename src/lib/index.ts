@@ -1,7 +1,13 @@
-import { Template, ExternalsPlugin } from 'webpack';
+import { Template, ExternalsPlugin, version } from 'webpack';
 import * as Chunk from 'webpack/lib/Chunk';
 
+import { HtmlWebpackPlugin } from './plugins';
+
+const ver = parseInt(version.split('.')[0])
+
 const PluginName = 'DynamicImportCdnPlugin';
+
+const CssExtractType = "css/mini-extract";
 type CdnPublicOpt = {
     url: string;
     noUrlPrefix?: boolean;
@@ -71,8 +77,6 @@ export class DynamicImportCdnPlugin {
         updateOpt(cdnCss);
         updateOpt(cdnJs);
 
-        const CssExtractType = "css/mini-extract";
-
         if (Object.keys(externals).length) {
             new ExternalsPlugin(
                 'var',
@@ -80,9 +84,28 @@ export class DynamicImportCdnPlugin {
             ).apply(compiler);
         }
 
+        if (ver >= 5) {
+            this.webpack5(compiler, { hasCdnJs, hasCdnCss, cdnCss, cdnJs })
+        } else {
+            this.webpack4(compiler, { hasCdnJs, hasCdnCss, cdnCss, cdnJs })
+        }
+    }
+
+    toArray<T = any>(obj) {
+        return Array.from<T>(obj)
+    }
+
+    webpack4(compiler, opt) {
+        let self = this
+        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs } = opt
         let globalCdn = this.globalCdn;
 
-        const findCdnDep = (dep, module, res?) => {
+        const findCdnDep = (opt: { dep, module?, chunk?, entryModule?, res?}) => {
+            let { dep, module, chunk, entryModule, res } = opt
+
+            if (entryModule) {
+                module = chunk.entryModule
+            }
             if (!res)
                 res = {};
             if (module) {
@@ -91,7 +114,7 @@ export class DynamicImportCdnPlugin {
                         return d;
                     if (d.module && d.userRequest && !res[d.userRequest]) {
                         res[d.userRequest] = true;
-                        let rs = findCdnDep(dep, d.module, res);
+                        let rs = findCdnDep({ dep, module: d.module, res });
                         if (rs)
                             return rs;
                     }
@@ -110,7 +133,7 @@ export class DynamicImportCdnPlugin {
                     while (true) {
                         if (global[key])
                             break;
-                        let dep = findCdnDep(key, chunk.entryModule);
+                        let dep = findCdnDep({ dep: key, chunk, entryModule: true });
                         if (!dep)
                             break;
 
@@ -154,7 +177,7 @@ export class DynamicImportCdnPlugin {
                     let chunkGroup = d.block.chunkGroup;
                     for (let key in cdnJs) {
                         if (globalCdn.js[key] || chunkGroup.chunks.find(ele => ele.id === key)
-                            || !findCdnDep(key, d.module)) {
+                            || !findCdnDep({ dep: key, module: d.module })) {
                             continue;
                         }
                         let chunk = new Chunk();
@@ -349,7 +372,7 @@ export class DynamicImportCdnPlugin {
             } = {
                 'html-webpack-plugin': {
                     setGlobal: () => {
-                        compilation.plugin('html-webpack-plugin-before-html-generation', function (htmlPluginData) {
+                        function setHtmlData(htmlPluginData) {
                             function unshiftCdn(cdn, assets) {
                                 let list = [];
                                 for (let key in cdn) {
@@ -361,7 +384,12 @@ export class DynamicImportCdnPlugin {
                             unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
                             unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
                             return htmlPluginData;
-                        });
+                        }
+
+                        if (ver >= 5)
+                            HtmlWebpackPlugin.getHooks(compilation).beforeAssetTagGeneration.tapAsync(PluginName, setHtmlData)
+                        else
+                            compilation.plugin('html-webpack-plugin-before-html-generation', setHtmlData);
                     }
                 },
                 'vue-client-plugin': {
@@ -416,6 +444,65 @@ export class DynamicImportCdnPlugin {
             let logic = logics[self.cdn.for];
             if (logic)
                 logic.setGlobal();
+        });
+    }
+
+
+    webpack5(compiler, opt) {
+        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs } = opt
+        let globalCdn = this.globalCdn;
+        let self = this
+
+        let allKeys = [...Object.keys(self.cdn.css), ...Object.keys(self.cdn.js)];
+
+        let exitsKeys = []
+
+        compiler.hooks.compile.tap(PluginName, ({ normalModuleFactory }) => {
+            normalModuleFactory.hooks.beforeResolve.tapAsync(PluginName, (data, callback) => {
+                const dependency = data.dependencies[0];
+
+                let key = dependency.request
+                if (allKeys.includes(key) && !exitsKeys.includes(key)) {
+
+                    exitsKeys.push(key)
+                    if (key.endsWith('.css'))
+                        globalCdn.css[key] = self.cdn.css[key]?.url
+                    else
+                        globalCdn.js[key] = self.cdn.js[key]?.url
+                }
+                callback()
+            })
+        });
+
+        const findDep = (chunk, compilation) => {
+            let modules = self.toArray(compilation.chunkGraph.getChunkModulesIterable(chunk));
+            let m = modules.filter(ele => allKeys.includes(ele.rawRequest)).map(ele => ele.rawRequest);
+            console.log(m);
+        }
+
+        compiler.hooks.compilation.tap(PluginName, function (compilation, options) {
+
+            compilation.hooks.afterOptimizeChunks.tap(PluginName, (chunks, chunkGroups) => {
+                for (const chunk of chunks) {
+                    findDep(chunk, compilation)
+                }
+            });
+
+            function setHtmlData(htmlPluginData, cb) {
+                function unshiftCdn(cdn, assets) {
+                    let list = [];
+                    for (let key in cdn) {
+                        list.push(cdn[key]);
+                    }
+                    if (list.length)
+                        assets.unshift(...list);
+                }
+                unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
+                unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
+                cb(null, htmlPluginData)
+            }
+            let htmlHooks = HtmlWebpackPlugin.getHooks(compilation)
+            htmlHooks.beforeAssetTagGeneration.tapAsync(PluginName, setHtmlData);
         });
     }
 }
