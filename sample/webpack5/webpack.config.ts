@@ -58,26 +58,6 @@ export default {
 					},
 				],
 			},
-			{
-				// webpack5 内置了 asset 模块, 用来代替 file-loader & url-loader & raw-loader 处理静态资源
-				test: /\.png|jpg|gif|jpeg|svg/,
-				type: 'asset',
-				parser: {
-					dataUrlCondition: {
-						maxSize: 10 * 1024,
-					},
-				},
-				generator: {
-					filename: 'images/[base]',
-				},
-			},
-			{
-				test: /\.txt|xlsx/,
-				type: 'asset',
-				generator: {
-					filename: 'files/[base]',
-				},
-			},
 		],
 	},
 	plugins: [

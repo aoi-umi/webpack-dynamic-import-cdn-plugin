@@ -1,6 +1,5 @@
 import Vue from 'vue';
 import Router, { RouteConfig } from 'vue-router';
-// import dynCdn from './views/dynamic-cdn.vue'
 
 Vue.use(Router);
 export const routerConfig = {
@@ -12,7 +11,6 @@ export const routerConfig = {
         path: '/dynamicCdn',
         text: 'dynamicCdn',
         component: () => import('./views/dynamic-cdn.vue')
-        // component: dynCdn
     },
 };
 

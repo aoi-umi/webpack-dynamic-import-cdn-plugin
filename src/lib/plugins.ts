@@ -2,13 +2,22 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-const envPath = path.resolve(__dirname, '../../env.js')
 let html = 'html-webpack-plugin'
-if (fs.existsSync(envPath)) {
-  let env = require(envPath)
-  if (env.htmlWebpackPlugin) {
-    html = env.htmlWebpackPlugin
-  }
+let webpack = 'webpack'
+let chunk = 'webpack/lib/Chunk'
+
+let relativePath = path.relative(__dirname, process.cwd())
+let p = relativePath.split(path.sep)
+if (p.length === 4 && p[2] === 'sample') {
+  html = path.resolve(__dirname, relativePath, 'node_modules', html)
+  webpack = path.resolve(__dirname, relativePath, 'node_modules', webpack)
+  chunk = path.resolve(__dirname, relativePath, 'node_modules', chunk)
 }
-let _HtmlWebpackPlugin = require(html)
-export const HtmlWebpackPlugin = _HtmlWebpackPlugin
+let HtmlWebpackPlugin = require(html)
+let Webpack = require(webpack)
+let Chunk = require(chunk)
+export default {
+  HtmlWebpackPlugin,
+  Webpack,
+  Chunk
+}

@@ -1,7 +1,8 @@
-import { Template, ExternalsPlugin, version } from 'webpack';
-import * as Chunk from 'webpack/lib/Chunk';
 
-import { HtmlWebpackPlugin } from './plugins';
+import path = require('path');
+import plugins from './plugins';
+const { HtmlWebpackPlugin, Chunk, Webpack } = plugins
+const { Template, ExternalsPlugin, version } = Webpack
 
 const ver = parseInt(version.split('.')[0])
 
@@ -29,6 +30,7 @@ type CdnOpt<CssType = string | {
     for?: string;
 };
 export class DynamicImportCdnPlugin {
+    static cdn: CdnOpt<CssOptType>;
     cdn: CdnOpt<CssOptType>;
     globalCdn: {
         js: any;
@@ -76,23 +78,37 @@ export class DynamicImportCdnPlugin {
         }
         updateOpt(cdnCss);
         updateOpt(cdnJs);
-
-        if (Object.keys(externals).length) {
-            new ExternalsPlugin(
-                'var',
-                externals
-            ).apply(compiler);
-        }
+        DynamicImportCdnPlugin.cdn = self.cdn
 
         if (ver >= 5) {
-            this.webpack5(compiler, { hasCdnJs, hasCdnCss, cdnCss, cdnJs })
+            this.webpack5(compiler, { hasCdnJs, hasCdnCss, cdnCss, cdnJs, externals })
         } else {
+            if (Object.keys(externals).length) {
+                new ExternalsPlugin(
+                    'var',
+                    externals
+                ).apply(compiler);
+            }
             this.webpack4(compiler, { hasCdnJs, hasCdnCss, cdnCss, cdnJs })
         }
     }
 
     toArray<T = any>(obj) {
         return Array.from<T>(obj)
+    }
+
+    setHtmlData(htmlPluginData, globalCdn) {
+        function unshiftCdn(cdn, assets) {
+            let list = [];
+            for (let key in cdn) {
+                list.push(cdn[key]);
+            }
+            if (list.length)
+                assets.unshift(...list);
+        }
+        unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
+        unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
+        return htmlPluginData
     }
 
     webpack4(compiler, opt) {
@@ -372,24 +388,9 @@ export class DynamicImportCdnPlugin {
             } = {
                 'html-webpack-plugin': {
                     setGlobal: () => {
-                        function setHtmlData(htmlPluginData) {
-                            function unshiftCdn(cdn, assets) {
-                                let list = [];
-                                for (let key in cdn) {
-                                    list.push(cdn[key]);
-                                }
-                                if (list.length)
-                                    assets.unshift(...list);
-                            }
-                            unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
-                            unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
-                            return htmlPluginData;
-                        }
-
-                        if (ver >= 5)
-                            HtmlWebpackPlugin.getHooks(compilation).beforeAssetTagGeneration.tapAsync(PluginName, setHtmlData)
-                        else
-                            compilation.plugin('html-webpack-plugin-before-html-generation', setHtmlData);
+                        compilation.plugin('html-webpack-plugin-before-html-generation', (htmlPluginData) => {
+                            return self.setHtmlData(htmlPluginData, globalCdn)
+                        });
                     }
                 },
                 'vue-client-plugin': {
@@ -449,60 +450,69 @@ export class DynamicImportCdnPlugin {
 
 
     webpack5(compiler, opt) {
-        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs } = opt
+        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs, externals } = opt
         let globalCdn = this.globalCdn;
         let self = this
+
+        if (Object.keys(externals).length) {
+            new ExternalsPlugin(
+                'var',
+                externals
+            ).apply(compiler);
+        }
+
+        // let externals = {}
+        // for (let key in cdnJs) {
+        //     externals[key] = [cdnJs[key].url, cdnJs[key].moduleName]
+        // }
+        // new ExternalsPlugin('var', externals).apply(compiler);
+        // return
 
         let allKeys = [...Object.keys(self.cdn.css), ...Object.keys(self.cdn.js)];
 
         let exitsKeys = []
 
-        compiler.hooks.compile.tap(PluginName, ({ normalModuleFactory }) => {
-            normalModuleFactory.hooks.beforeResolve.tapAsync(PluginName, (data, callback) => {
-                const dependency = data.dependencies[0];
-
-                let key = dependency.request
-                if (allKeys.includes(key) && !exitsKeys.includes(key)) {
-
-                    exitsKeys.push(key)
-                    if (key.endsWith('.css'))
-                        globalCdn.css[key] = self.cdn.css[key]?.url
-                    else
-                        globalCdn.js[key] = self.cdn.js[key]?.url
-                }
-                callback()
-            })
-        });
+        const setGlobal = (key) => {
+            if (!exitsKeys.includes(key)) {
+                exitsKeys.push(key)
+                if (key.endsWith('.css'))
+                    globalCdn.css[key] = self.cdn.css[key]?.url
+                else
+                    globalCdn.js[key] = self.cdn.js[key]?.url
+            }
+        }
 
         const findDep = (chunk, compilation) => {
             let modules = self.toArray(compilation.chunkGraph.getChunkModulesIterable(chunk));
-            let m = modules.filter(ele => allKeys.includes(ele.rawRequest)).map(ele => ele.rawRequest);
-            console.log(m);
+            // let entry = compilation.chunkGraph.getChunkEntryModulesIterable(chunk)
+            // let isEntry = chunk.canBeInitial()
+            let isEntry = true
+            let m = [];
+            modules.forEach(ele => {
+                for (let k of ['rawRequest', 'userRequest']) {
+                    if (allKeys.includes(ele[k])) {
+                        m.push(ele[k])
+                        if (isEntry) {
+                            setGlobal(ele[k]);
+                        }
+                        break;
+                    }
+                }
+            })
         }
 
         compiler.hooks.compilation.tap(PluginName, function (compilation, options) {
-
             compilation.hooks.afterOptimizeChunks.tap(PluginName, (chunks, chunkGroups) => {
                 for (const chunk of chunks) {
                     findDep(chunk, compilation)
                 }
             });
 
-            function setHtmlData(htmlPluginData, cb) {
-                function unshiftCdn(cdn, assets) {
-                    let list = [];
-                    for (let key in cdn) {
-                        list.push(cdn[key]);
-                    }
-                    if (list.length)
-                        assets.unshift(...list);
-                }
-                unshiftCdn(globalCdn.js, htmlPluginData.assets.js);
-                unshiftCdn(globalCdn.css, htmlPluginData.assets.css);
-                cb(null, htmlPluginData)
-            }
             let htmlHooks = HtmlWebpackPlugin.getHooks(compilation)
-            htmlHooks.beforeAssetTagGeneration.tapAsync(PluginName, setHtmlData);
+            htmlHooks.beforeAssetTagGeneration.tapAsync(PluginName, (htmlPluginData, cb) => {
+                let data = self.setHtmlData(htmlPluginData, globalCdn)
+                cb(null, data);
+            });
         });
     }
 }
