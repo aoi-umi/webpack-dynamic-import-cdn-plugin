@@ -450,23 +450,15 @@ export class DynamicImportCdnPlugin {
 
 
     webpack5(compiler, opt) {
-        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs, externals } = opt
+        let { hasCdnCss, hasCdnJs, cdnCss, cdnJs, } = opt
         let globalCdn = this.globalCdn;
         let self = this
 
-        if (Object.keys(externals).length) {
-            new ExternalsPlugin(
-                'var',
-                externals
-            ).apply(compiler);
+        let externals = {}
+        for (let key in cdnJs) {
+            externals[key] = [cdnJs[key].url, cdnJs[key].moduleName]
         }
-
-        // let externals = {}
-        // for (let key in cdnJs) {
-        //     externals[key] = [cdnJs[key].url, cdnJs[key].moduleName]
-        // }
-        // new ExternalsPlugin('var', externals).apply(compiler);
-        // return
+        new ExternalsPlugin('script', externals).apply(compiler);
 
         let allKeys = [...Object.keys(self.cdn.css), ...Object.keys(self.cdn.js)];
 
@@ -484,27 +476,42 @@ export class DynamicImportCdnPlugin {
 
         const findDep = (chunk, compilation) => {
             let modules = self.toArray(compilation.chunkGraph.getChunkModulesIterable(chunk));
-            // let entry = compilation.chunkGraph.getChunkEntryModulesIterable(chunk)
-            // let isEntry = chunk.canBeInitial()
-            let isEntry = true
+
             let m = [];
             modules.forEach(ele => {
                 for (let k of ['rawRequest', 'userRequest']) {
                     if (allKeys.includes(ele[k])) {
-                        m.push(ele[k])
-                        if (isEntry) {
-                            setGlobal(ele[k]);
-                        }
+                        m.push({
+                            request: ele[k],
+                            requestKey: k,
+                            module: ele
+                        });
                         break;
                     }
                 }
             })
+            return m
         }
 
+        let chunkMap = new Map()
         compiler.hooks.compilation.tap(PluginName, function (compilation, options) {
-            compilation.hooks.afterOptimizeChunks.tap(PluginName, (chunks, chunkGroups) => {
+            compilation.hooks.afterChunks.tap(PluginName, (chunks) => {
                 for (const chunk of chunks) {
-                    findDep(chunk, compilation)
+                    let m = findDep(chunk, compilation);
+                    chunkMap.set(chunk.debugId, m)
+                    let isEntry = chunk.canBeInitial()
+                    m.forEach(ele => {
+                        let key = ele.request
+                        if (isEntry) {
+                            let cdn = self.cdn.js[key]
+                            if (cdn) {
+                                ele.module.externalType = 'var'
+                                ele.module.request = cdn.moduleName
+                            }
+                            setGlobal(key)
+                        } else {
+                        }
+                    })
                 }
             });
 

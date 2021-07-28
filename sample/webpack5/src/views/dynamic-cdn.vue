@@ -6,7 +6,7 @@
 </template>
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
-import videojs from 'video.js';
+import * as videojs from 'video.js';
 import 'video.js/dist/video-js.min.css';
 
 @Component

@@ -8,8 +8,6 @@ const { DynamicImportCdnPlugin } = require('../../dest/lib');
 
 const VueLoaderPlugin = require('vue-loader/lib/plugin-webpack5');
 
-console.log('process.env.NODE_ENV :>> ', process.env.NODE_ENV);
-
 export default {
 	entry: ['@babel/polyfill', './src/main.ts'],
 	output: {
@@ -71,13 +69,10 @@ export default {
 		new Webpack.ProvidePlugin({
 			Vue: ['vue/dist/vue.esm.js', 'default'],
 		}),
-		new Webpack.DefinePlugin({
-			'process.env.NODE_ENV': JSON.stringify('production'),
-		}),
 		new DynamicImportCdnPlugin({
 			urlPrefix: 'https://cdn.jsdelivr.net/npm',
 			css: {
-				'video.js/dist/video-js.min.css': '/video.js@7.6.6/dist/video-js.min.css',
+				// 'video.js/dist/video-js.min.css': '/video.js@7.6.6/dist/video-js.min.css',
 			},
 			js: {
 				vue: {

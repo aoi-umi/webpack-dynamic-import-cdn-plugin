@@ -1,8 +1,10 @@
 # webpack-dynamic-import-cdn-plugin
 
+> webpack5 (js only)
 ## usage
 
-``` ts
+``` ts 
+
 import { DynamicImportCdnPlugin } from "webpack-dynamic-import-cdn-plugin";
 new DynamicImportCdnPlugin({
   urlPrefix: 'https://unpkg.com',
