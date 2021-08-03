@@ -1,4 +1,5 @@
 import Vue from 'vue';
+import 'view-design/dist/styles/iview.css'
 import router from './router';
 import App from './app.vue';
 

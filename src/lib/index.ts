@@ -111,6 +111,70 @@ export class DynamicImportCdnPlugin {
         return htmlPluginData
     }
 
+    getCssFn() {
+        let insCdnCss = 'installedCdnCssHref'
+        let importCdnCss = 'importCdnCss'
+        let temp = Template.indent([
+            `var ${insCdnCss} = {}`,
+            `var ${importCdnCss} = function(href) {`,
+            Template.indent([
+                `var fullhref = href;`,
+                `if (${insCdnCss}[href]) {`,
+                Template.indent([
+                    `return null`
+                ]),
+                `}`,
+                `return new Promise(function(resolve, reject) {`,
+                Template.indent([
+                    'var existingLinkTags = document.getElementsByTagName("link");',
+                    'for(var i = 0; i < existingLinkTags.length; i++) {',
+                    Template.indent([
+                        'var tag = existingLinkTags[i];',
+                        'var dataHref = tag.getAttribute("data-href") || tag.getAttribute("href");',
+                        'if(tag.rel === "stylesheet" && (dataHref === href || dataHref === fullhref)) return resolve();'
+                    ]),
+                    '}',
+                    'var existingStyleTags = document.getElementsByTagName("style");',
+                    'for(var i = 0; i < existingStyleTags.length; i++) {',
+                    Template.indent([
+                        'var tag = existingStyleTags[i];', 'var dataHref = tag.getAttribute("data-href");',
+                        'if(dataHref === href || dataHref === fullhref) return resolve();'
+                    ]),
+                    '}',
+                    'var linkTag = document.createElement("link");', 'linkTag.rel = "stylesheet";',
+                    'linkTag.type = "text/css";',
+                    'linkTag.onload = function() {',
+                    Template.indent([
+                        `${insCdnCss}[href] = 1`,
+                        `resolve()`
+                    ]),
+                    `}`,
+                    'linkTag.onerror = function(event) {',
+                    Template.indent([
+                        'var request = event && event.target && event.target.src || fullhref;',
+                        'var err = new Error("Loading CSS chunk " + href + " failed.\\n(" + request + ")");',
+                        'err.code = "CDN_CSS_CHUNK_LOAD_FAILED";',
+                        'err.request = request;',
+                        `delete ${insCdnCss}[href]`,
+                        'linkTag.parentNode.removeChild(linkTag)',
+                        'reject(err);'
+                    ]),
+                    '};',
+                    'linkTag.href = fullhref;',
+                    'var head = document.getElementsByTagName("head")[0];',
+                    'head.appendChild(linkTag);'
+                ]),
+                `});`,
+            ]),
+            `}`
+        ])
+        return {
+            temp,
+            insCdnCss,
+            importCdnCss
+        }
+    }
+
     webpack4(compiler, opt) {
         let self = this
         let { hasCdnCss, hasCdnJs, cdnCss, cdnJs } = opt
@@ -153,11 +217,6 @@ export class DynamicImportCdnPlugin {
                         if (!dep)
                             break;
 
-                        // if (type === 'css') {
-                        //     global[key] = cdnOpt[key];
-                        // } else {
-                        //     global[key] = cdnOpt[key].url
-                        // }
                         global[key] = cdnOpt[key].url
                         break;
                     }
@@ -181,13 +240,7 @@ export class DynamicImportCdnPlugin {
             }
 
             const cdnJsFn = (chunk) => {
-                // if (!chunk.isOnlyInitial()) {
-                //     return;
-                // }
-                // let entry = chunk.hasRuntime();
-                // if (entry) {
                 setGlobalCdn('js', chunk);
-                // }
                 let dependencies = getDependencies(chunk.getModules());
                 for (let d of dependencies) {
                     let chunkGroup = d.block.chunkGroup;
@@ -258,9 +311,6 @@ export class DynamicImportCdnPlugin {
 
             let chunkCssMap = {};
             const cdnCssFn = (chunk) => {
-                // if (!chunk.isOnlyInitial()) {
-                //     return;
-                // }
                 let entry = chunk.hasRuntime();
                 if (entry) {
                     setGlobalCdn('css', chunk);
@@ -283,12 +333,12 @@ export class DynamicImportCdnPlugin {
                 }
             }
 
-            const insCdnCssChunksVar = 'installedCdnCssChunks';
+            // const insCdnCssChunksVar = 'installedCdnCssChunks';
             const cssHandler = (compilation) => {
                 let mainTemplate = compilation.mainTemplate;
-                mainTemplate.hooks.localVars.tap(PluginName, function (source, chunk, hash) {
-                    return Template.asString([source, '', '// object to store loaded cdn CSS chunks', `var ${insCdnCssChunksVar} = {};`]);
-                });
+                // mainTemplate.hooks.localVars.tap(PluginName, function (source, chunk, hash) {
+                //     return Template.asString([source, '', '// object to store loaded cdn CSS chunks', `var ${insCdnCssChunksVar} = {};`]);
+                // });
 
                 compilation.hooks.afterOptimizeDependencies.tap(PluginName, (modules) => {
                     for (let key in cdnCss) {
@@ -314,62 +364,20 @@ export class DynamicImportCdnPlugin {
                 mainTemplate.hooks.requireEnsure.tap(PluginName, (source, chunk, hash) => {
                     let buf = [source];
                     const cdnCssVar = 'cdnCss';
+                    let rs = self.getCssFn()
                     buf.push(
                         '',
+                        `${rs.temp}`,
                         `var ${cdnCssVar} = ${JSON.stringify(chunkCssMap, null, '\t')};`,
-                        // `var testCss = ${JSON.stringify(cdnCss, null, '\t')};`,
-                        `if(${insCdnCssChunksVar}[chunkId]) promises.push(${insCdnCssChunksVar}[chunkId]);`,
-                        `else if(${insCdnCssChunksVar}[chunkId] !== 0 && ${cdnCssVar}[chunkId]) {`,
+                        `${cdnCssVar}[chunkId] && ${cdnCssVar}[chunkId].forEach(function(ele) {`,
                         Template.indent([
-                            `promises.push(${insCdnCssChunksVar}[chunkId] = Promise.all(${cdnCssVar}[chunkId].map(function(href) {`,
+                            `var p = ${rs.importCdnCss}(ele)`,
+                            `if (p)`,
                             Template.indent([
-                                `var fullhref = href;`,
-                                `return new Promise(function(resolve, reject) {`,
-                                Template.indent([
-                                    'var existingLinkTags = document.getElementsByTagName("link");',
-                                    'for(var i = 0; i < existingLinkTags.length; i++) {',
-                                    Template.indent([
-                                        'var tag = existingLinkTags[i];',
-                                        'var dataHref = tag.getAttribute("data-href") || tag.getAttribute("href");',
-                                        'if(tag.rel === "stylesheet" && (dataHref === href || dataHref === fullhref)) return resolve();'
-                                    ]),
-                                    '}',
-                                    'var existingStyleTags = document.getElementsByTagName("style");',
-                                    'for(var i = 0; i < existingStyleTags.length; i++) {',
-                                    Template.indent([
-                                        'var tag = existingStyleTags[i];', 'var dataHref = tag.getAttribute("data-href");',
-                                        'if(dataHref === href || dataHref === fullhref) return resolve();'
-                                    ]),
-                                    '}',
-                                    'var linkTag = document.createElement("link");', 'linkTag.rel = "stylesheet";',
-                                    'linkTag.type = "text/css";',
-                                    'linkTag.onload = resolve;',
-                                    'linkTag.onerror = function(event) {',
-                                    Template.indent([
-                                        'var request = event && event.target && event.target.src || fullhref;',
-                                        'var err = new Error("Loading CSS chunk " + chunkId + " failed.\\n(" + request + ")");',
-                                        'err.code = "CDN_CSS_CHUNK_LOAD_FAILED";',
-                                        'err.request = request;',
-                                        `delete ${insCdnCssChunksVar}[chunkId]`,
-                                        'linkTag.parentNode.removeChild(linkTag)',
-                                        'reject(err);'
-                                    ]),
-                                    '};',
-                                    'linkTag.href = fullhref;',
-                                    // crossOriginLoading ?
-                                    //     Template.asString([`if (linkTag.href.indexOf(window.location.origin + '/') !== 0) {`,
-                                    //         Template.indent(`linkTag.crossOrigin = ${JSON.stringify(crossOriginLoading)};`), '}'
-                                    //     ]) : '',
-                                    'var head = document.getElementsByTagName("head")[0];',
-                                    'head.appendChild(linkTag);'
-                                ]),
-                                `});`,
+                                `promises.push(p)`
                             ]),
-                            `})).then(function() {`,
-                            Template.indent([`${insCdnCssChunksVar}[chunkId] = 0;`]),
-                            '}));'
                         ]),
-                        '}',
+                        `})`,
                     );
                     return Template.asString(buf);
                 });
@@ -396,8 +404,6 @@ export class DynamicImportCdnPlugin {
                 'vue-client-plugin': {
                     setGlobal: () => {
                         compiler.hooks.emit.tap(PluginName, function () {
-                            // const hash = require('hash-sum');
-                            // let stats = compilation.getStats().toJson();
                             let assets = [];
                             for (let key in cdnJs) {
                                 assets.push({
@@ -412,22 +418,6 @@ export class DynamicImportCdnPlugin {
                                     let manifest = JSON.parse(asset.source());
 
                                     manifest.all.push(...assets.map(ele => ele.url));
-                                    // for (let ele of assets) {
-                                    //     if (!ele.initial) {
-                                    //         let m = stats.modules.find(m => m.id === ele.name);
-                                    //         if (m) {
-                                    //             m.issuerPath.forEach(issuer => {
-                                    //                 let hashId = hash(issuer.identifier.replace(/\s\w+$/, ''))
-                                    //                 let module = manifest.modules[hashId];
-                                    //                 if (!module)
-                                    //                     module = manifest.modules[hashId] = [];
-                                    //                 let idx = manifest.all.findIndex(a => a === ele.url);
-                                    //                 if (idx >= 0 && !module.includes(idx))
-                                    //                     module.push(idx)
-                                    //             })
-                                    //         }
-                                    //     }
-                                    // }
 
                                     manifest.initial.unshift(...assets.filter(ele => ele.initial).map(ele => ele.url));
                                     let json = JSON.stringify(manifest, null, 2);
@@ -490,30 +480,87 @@ export class DynamicImportCdnPlugin {
                     }
                 }
             })
-            return m
+            return { modules, m };
         }
 
-        let chunkMap = new Map()
+        let cssChunkMap = {}
+        const disconnectCss = (chunks, compilation) => {
+            for (let chunk of chunks) {
+                let modules = self.toArray(compilation.chunkGraph.getChunkModulesIterable(chunk));
+                Object.values<any>(cssChunkMap).reduce((a, b) => {
+                    return [...a, ...b.modules]
+                }, []).forEach(ele => {
+                    let f = modules.find(ele2 => ele2.type === CssExtractType &&
+                        ele2.issuer && ele2.issuer.debugId == ele.module.debugId);
+                    if (f)
+                        compilation.chunkGraph.disconnectChunkAndModule(chunk, f);
+                })
+            }
+        }
         compiler.hooks.compilation.tap(PluginName, function (compilation, options) {
             compilation.hooks.afterChunks.tap(PluginName, (chunks) => {
                 for (const chunk of chunks) {
-                    let m = findDep(chunk, compilation);
-                    chunkMap.set(chunk.debugId, m)
+                    let { m, modules } = findDep(chunk, compilation);
                     let isEntry = chunk.canBeInitial()
                     m.forEach(ele => {
                         let key = ele.request
                         if (isEntry) {
-                            let cdn = self.cdn.js[key]
-                            if (cdn) {
+                            if (cdnJs[key]) {
+                                let cdn = cdnJs[key]
                                 ele.module.externalType = 'var'
                                 ele.module.request = cdn.moduleName
                             }
                             setGlobal(key)
-                        } else {
+                        }
+                        if (cdnCss[key]) {
+                            if (!cssChunkMap[chunk.debugId])
+                                cssChunkMap[chunk.debugId] = { isEntry, modules: [] }
+                            cssChunkMap[chunk.debugId].modules.push(ele)
                         }
                     })
                 }
+                disconnectCss(chunks, compilation)
             });
+
+            let mainTemplate = compilation.mainTemplate
+            mainTemplate.hooks.requireEnsure.tap(PluginName, (source, chunk, hash) => {
+                let buf = [source]
+
+                const cdnCssVar = 'cdnCss';
+                let chunks = self.toArray(compilation.chunks)
+                if (Object.keys(cssChunkMap).length) {
+                    let cssObj = {}
+                    for (let key in cssChunkMap) {
+                        let v = cssChunkMap[key]
+                        if (v.isEntry) continue
+                        let match = chunks.find(ele => ele.debugId == key)
+                        if (match) {
+                            cssObj[match.id] = []
+                            v.modules.forEach(ele => {
+                                cssObj[match.id].push(cdnCss[ele.request].url)
+                            })
+                        }
+
+                    }
+
+                    let rs = self.getCssFn()
+                    buf.push(Template.indent([
+                        rs.temp,
+                        `var ${cdnCssVar} = ${JSON.stringify(cssObj, null, '\t')};`,
+                        `${cdnCssVar}[chunkId] && ${cdnCssVar}[chunkId].forEach(function(ele) {`,
+                        Template.indent([
+                            `var p = ${rs.importCdnCss}(ele)`,
+                            `if (p)`,
+                            Template.indent([
+                                `promises.push(p)`
+                            ]),
+                        ]),
+                        `})`,
+                    ]));
+                }
+
+                return Template.asString(buf);
+            })
 
             let htmlHooks = HtmlWebpackPlugin.getHooks(compilation)
             htmlHooks.beforeAssetTagGeneration.tapAsync(PluginName, (htmlPluginData, cb) => {

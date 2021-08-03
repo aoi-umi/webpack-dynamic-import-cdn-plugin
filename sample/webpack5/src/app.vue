@@ -1,12 +1,17 @@
 <template>
   <div>
     <router-link v-for="ele in routerConfig" :key="ele.path" :to="ele.path">
-      <button>{{ele.text}}</button>
+      <button class="ivu-btn ivu-btn-primary">{{ele.text}}</button>
     </router-link>
     <router-view></router-view>
   </div>
 </template>
 
+<style>
+button {
+  margin: 5px;
+}
+</style>
 <script lang="ts">
 import Vue from "vue";
 import { Component } from "vue-property-decorator";

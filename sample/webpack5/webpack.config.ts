@@ -18,7 +18,7 @@ export default {
 	module: {
 		rules: [
 			{
-				test: /\.css|sass|scss$/,
+				test: /\.(css|sass|scss)$/,
 				use: [
 					{
 						loader: MiniCssExtractPlugin.loader,
@@ -26,21 +26,10 @@ export default {
 					{
 						loader: 'css-loader',
 					},
-					{
-						loader: 'postcss-loader',
-						options: {
-							postcssOptions: {
-								plugins: [['postcss-preset-env', {}]],
-							},
-						},
-					},
-					{
-						loader: 'sass-loader',
-					},
 				],
 			},
 			{
-				test: /\.ts|js$/,
+				test: /\.(ts|js)$/,
 				exclude: /node_modules/,
 				use: [
 					{
@@ -55,6 +44,13 @@ export default {
 						loader: 'vue-loader',
 					},
 				],
+			},
+			{
+				test: /\.(ttf|eot|woff|woff2|svg)$/,
+				type: 'asset',
+				generator: {
+					filename: 'files/[base]',
+				},
 			},
 		],
 	},
@@ -72,7 +68,8 @@ export default {
 		new DynamicImportCdnPlugin({
 			urlPrefix: 'https://cdn.jsdelivr.net/npm',
 			css: {
-				// 'video.js/dist/video-js.min.css': '/video.js@7.6.6/dist/video-js.min.css',
+				'video.js/dist/video-js.min.css': '/video.js@7.6.6/dist/video-js.min.css',
+				'view-design/dist/styles/iview.css': '/view-design@4.6.1/dist/styles/iview.css',
 			},
 			js: {
 				vue: {
