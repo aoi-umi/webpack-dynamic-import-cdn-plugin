@@ -9,16 +9,24 @@ const ver = parseInt(version.split('.')[0])
 const PluginName = 'DynamicImportCdnPlugin';
 
 const CssExtractType = "css/mini-extract";
+type CdnCommonOpt = {
+    urlPrefix?: string;
+    split?: string;
+    noRoot?: boolean;
+};
 type CdnPublicOpt = {
     url: string;
+    //@deprecated use urlPrefix
     noUrlPrefix?: boolean;
-}
+    package?: string;
+    version?: string;
+    root?: string;
+} & CdnCommonOpt
 type CssOptType = {
     [key: string]: {} & CdnPublicOpt
 }
 type CdnOpt<CssType = string | {
 } & CdnPublicOpt> = {
-    urlPrefix?: string;
     css?: {
         [key: string]: CssType
     };
@@ -28,7 +36,7 @@ type CdnOpt<CssType = string | {
         } & CdnPublicOpt
     };
     for?: string;
-};
+} & CdnCommonOpt;
 export class DynamicImportCdnPlugin {
     static cdn: CdnOpt<CssOptType>;
     cdn: CdnOpt<CssOptType>;
@@ -71,9 +79,26 @@ export class DynamicImportCdnPlugin {
         function updateOpt(opts) {
             for (let key in opts) {
                 let opt: CdnPublicOpt = opts[key];
-                if (self.cdn.urlPrefix && (!opt || !opt.noUrlPrefix)) {
-                    opt.url = `${self.cdn.urlPrefix}${opt.url}`
+                let urlArr = [];
+                if (opt.urlPrefix) {
+                    urlArr.push(opt.urlPrefix)
+                } else if (self.cdn.urlPrefix && (!opt || !opt.noUrlPrefix)) {
+                    urlArr.push(self.cdn.urlPrefix)
                 }
+
+                let split = opt.split || self.cdn.split || '@'
+                if (opt.package) {
+                    let arr = [`/${opt.package}`];
+                    if (opt.version) {
+                        arr.push(opt.version);
+                    }
+                    urlArr.push(arr.join(split));
+                }
+                let noRoot = opt.noRoot ?? self.cdn.noRoot;
+                if (!noRoot && opt.root)
+                    urlArr.push(opt.root);
+                urlArr.push(opt.url);
+                opt.url = urlArr.join('');
             }
         }
         updateOpt(cdnCss);
